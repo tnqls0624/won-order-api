@@ -1,0 +1,757 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Country {
+  CAMBODIA
+  KOREA
+  USA
+  CHINA
+}
+
+enum Currency {
+  KHR
+  KRW
+  USD
+  CNY
+}
+
+enum Language {
+  km
+  ko
+  en
+  zh
+}
+
+enum MainOrderStatus {
+  WAIT
+  PROGRESS
+  COMPLETE
+  CANCEL
+}
+
+enum OrderMenuStatus {
+  WAIT
+  PROGRESS
+  COMPLETE
+  CANCEL
+}
+
+enum AdminType {
+  SUPER
+  MASTER
+  EMPLOYEE
+}
+
+enum VerificationType {
+  SMS
+  PASSWORD
+  RECOVERY
+}
+
+enum MenuStatus {
+  BLIND
+  FOR_SALE
+  SOLD_OUT
+}
+
+enum MenuState {
+  NORMAL
+  NEW
+  BEST
+  NEW_BEST
+}
+
+enum MenuCategoryStatus {
+  BLIND
+  FOR_SALE
+}
+
+enum MenuOptionCategoryType {
+  REQUIRE
+  OPTION
+}
+
+enum UserPushTokenPlatformType {
+  IOS
+  ANDROID
+  WEB
+  OTHER
+}
+
+enum OrderTypeEnum {
+  HALL
+  WRAP
+  DELIVERY
+}
+
+enum OrderGroupPaymentEnum {
+  NOT_PAID
+  PAID
+  REFUND
+}
+
+enum OrderGroupPaymentTypeEnum {
+  ON_SITE_PAYMENT
+  CASH
+  CREDIT_CARD
+  ABA_CREDIT_CARD
+  ABA_APP_PAYMENT
+}
+
+enum ContactStatus {
+  WAIT
+  COMPLETE
+}
+
+model user {
+  id         Int          @id @default(autoincrement())
+  phone      String?
+  password   String?
+  nickname   String
+  address    String?
+  token      String?
+  provider   String?
+  remove_at  DateTime?
+  create_at  DateTime     @default(now())
+  update_at  DateTime     @default(now()) @updatedAt
+  main_order main_order[]
+  addr_list  addr_list[]
+
+  @@index([remove_at, provider, token])
+}
+
+model addr_list {
+  id        Int      @id @default(autoincrement())
+  user_id   Int?
+  guest_id  String?
+  phone     String?
+  address   String
+  is_active Boolean  @default(false)
+  create_at DateTime @default(now())
+  update_at DateTime @default(now()) @updatedAt
+
+  user user? @relation(fields: [user_id], references: [id])
+}
+
+model push {
+  id        Int                       @id @default(autoincrement())
+  user_id   Int                       @unique
+  serial    String                    @unique
+  token     String                    @unique
+  platform  UserPushTokenPlatformType @default(OTHER)
+  remove_at DateTime?
+  create_at DateTime                  @default(now())
+  update_at DateTime                  @default(now()) @updatedAt
+  admin     admin?                    @relation(fields: [user_id], references: [id])
+
+  @@index([remove_at, serial, token])
+}
+
+model document {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String   @db.Text
+  create_at DateTime @default(now())
+  update_at DateTime @default(now()) @updatedAt
+}
+
+model admin {
+  id          Int           @id @default(autoincrement())
+  market_id   Int?
+  language_id Int           @default(3)
+  type        AdminType     @default(EMPLOYEE)
+  admin_id    String
+  password    String
+  nickname    String
+  remove_at   DateTime?
+  create_at   DateTime      @default(now())
+  update_at   DateTime      @default(now()) @updatedAt
+  admin_group admin_group[]
+  push        push?
+  market      market?       @relation(fields: [market_id], references: [id])
+  language    language?     @relation(fields: [language_id], references: [id])
+  contact     contact[]
+
+  @@index([remove_at, nickname, type, admin_id])
+}
+
+model market {
+  id               Int                @id @default(autoincrement())
+  currency_id      Int                @default(3)
+  language_id      Int                @default(3)
+  name             String             @unique
+  access_id        String             @unique
+  country          Country            @default(CAMBODIA)
+  phone            String?
+  email            String?
+  remove_at        DateTime?
+  create_at        DateTime           @default(now())
+  update_at        DateTime           @default(now()) @updatedAt
+  admins           admin[]
+  tables           table[]
+  group            group[]
+  menu_category    menu_category[]
+  setting          setting[]
+  order_menu_stats order_menu_stats[]
+  main_order       main_order[]
+  custom_qr        custom_qr[]
+
+  language language? @relation(fields: [language_id], references: [id])
+  currency currency? @relation(fields: [currency_id], references: [id])
+
+  @@index([remove_at, email, phone, country])
+}
+
+model table {
+  id         Int          @id @default(autoincrement())
+  market_id  Int
+  group_id   Int
+  table_num  String
+  code       String       @unique
+  remove_at  DateTime?
+  create_at  DateTime     @default(now())
+  update_at  DateTime     @default(now()) @updatedAt
+  market     market?      @relation(fields: [market_id], references: [id])
+  group      group?       @relation(fields: [group_id], references: [id])
+  main_order main_order[]
+
+  @@index([market_id, group_id, table_num])
+  @@index([remove_at, code])
+}
+
+model admin_group {
+  id        Int      @id @default(autoincrement())
+  admin_id  Int
+  group_id  Int
+  selected  Boolean  @default(false)
+  create_at DateTime @default(now())
+  update_at DateTime @default(now()) @updatedAt
+  admin     admin?   @relation(fields: [admin_id], references: [id])
+  group     group?   @relation(fields: [group_id], references: [id])
+
+  @@unique([admin_id, group_id])
+  @@index([selected])
+}
+
+model group {
+  id                  Int                   @id @default(autoincrement())
+  market_id           Int
+  name                String
+  content             String?
+  remove_at           DateTime?
+  create_at           DateTime              @default(now())
+  update_at           DateTime              @default(now()) @updatedAt
+  table               table[]
+  menu_category       menu_category[]
+  admin_group         admin_group[]
+  setting             setting?
+  order_group         order_group[]
+  group_tl            group_tl[]
+  order_group_payment order_group_payment[]
+  order_menu_stats    order_menu_stats[]
+  notice              notice[]
+  comment             comment[]
+  market              market?               @relation(fields: [market_id], references: [id])
+
+  @@index([remove_at, market_id])
+}
+
+model setting {
+  id                   Int       @id @default(autoincrement())
+  market_id            Int?
+  group_id             Int       @unique
+  wifi_ssid            String?
+  wifi_password        String?
+  start_business_hours String?
+  end_business_hours   String?
+  start_break_time     String?
+  end_break_time       String?
+  comment              String?
+  name                 String?
+  address              String?
+  tel                  String?
+  text_color           String    @default("#49382b")
+  background_color     String    @default("#ffe6ad")
+  settlement_time      String?
+  remove_at            DateTime?
+  create_at            DateTime  @default(now())
+  update_at            DateTime  @default(now()) @updatedAt
+
+  group  group?  @relation(fields: [group_id], references: [id])
+  market market? @relation(fields: [market_id], references: [id])
+  logo   logo?
+
+  @@index([remove_at, market_id, group_id])
+}
+
+model menu_category {
+  id               Int                @id @default(autoincrement())
+  market_id        Int
+  group_id         Int
+  index            Int
+  status           MenuStatus         @default(BLIND)
+  name             String
+  content          String
+  remove_at        DateTime?
+  create_at        DateTime           @default(now())
+  update_at        DateTime           @default(now()) @updatedAt
+  menu             menu[]
+  market           market             @relation(fields: [market_id], references: [id])
+  group            group              @relation(fields: [group_id], references: [id])
+  menu_category_tl menu_category_tl[]
+
+  @@index([remove_at, status, market_id, group_id])
+}
+
+model menu {
+  id                   Int                    @id @default(autoincrement())
+  menu_category_id     Int
+  status               MenuStatus             @default(BLIND)
+  state                MenuState              @default(NORMAL)
+  name                 String
+  content              String?
+  amount               Float
+  index                Int?
+  remove_at            DateTime?
+  is_active            Boolean                @default(false)
+  create_at            DateTime               @default(now())
+  update_at            DateTime               @default(now()) @updatedAt
+  menu_option_category menu_option_category[]
+  menu_on_image        menu_on_image[]
+  order_menu           order_menu[]
+  menu_tl              menu_tl[]
+  menu_category        menu_category          @relation(fields: [menu_category_id], references: [id])
+
+  @@index([remove_at, state, status, menu_category_id])
+}
+
+model menu_on_image {
+  id        Int      @id @default(autoincrement())
+  menu_id   Int
+  image_id  Int
+  create_at DateTime @default(now())
+  update_at DateTime @default(now()) @updatedAt
+  menu      menu?    @relation(fields: [menu_id], references: [id])
+  image     image?   @relation(fields: [image_id], references: [id])
+}
+
+model image {
+  id            Int             @id @default(autoincrement())
+  hash          String          @unique
+  w360          String
+  w130          String
+  w120          String
+  create_at     DateTime        @default(now())
+  update_at     DateTime        @default(now()) @updatedAt
+  menu_on_image menu_on_image[]
+}
+
+model menu_option_category {
+  id                      Int                       @id @default(autoincrement())
+  menu_id                 Int
+  index                   Int
+  type                    MenuOptionCategoryType    @default(OPTION)
+  name                    String
+  max_select_count        Int
+  remove_at               DateTime?
+  create_at               DateTime                  @default(now())
+  update_at               DateTime                  @default(now()) @updatedAt
+  menu_option             menu_option[]
+  menu_option_category_tl menu_option_category_tl[]
+  menu                    menu                      @relation(fields: [menu_id], references: [id])
+
+  @@unique([name, menu_id])
+  @@index([remove_at, type])
+}
+
+model menu_option {
+  id                      Int                  @id @default(autoincrement())
+  menu_option_category_id Int
+  name                    String
+  amount                  Float
+  index                   Int?
+  remove_at               DateTime?
+  create_at               DateTime             @default(now())
+  update_at               DateTime             @default(now()) @updatedAt
+  order_menu_option       order_menu_option[]
+  menu_option_tl          menu_option_tl[]
+  menu_option_category    menu_option_category @relation(fields: [menu_option_category_id], references: [id])
+
+  @@unique([name, menu_option_category_id])
+  @@index([remove_at])
+}
+
+model verification {
+  id        Int              @id @default(autoincrement())
+  type      VerificationType @default(SMS)
+  phone     String
+  token     String
+  code      String
+  create_at DateTime         @default(now())
+  update_at DateTime         @default(now()) @updatedAt
+}
+
+model main_order {
+  id                  Int                   @id @default(autoincrement())
+  market_id           Int
+  user_id             Int?
+  guest_id            String?
+  table_id            Int?
+  phone               String?
+  type                OrderTypeEnum         @default(HALL)
+  order_num           String                @unique
+  status              MainOrderStatus       @default(WAIT)
+  total               Float
+  delivery_addr       String?
+  map_url             String?
+  memo                String?
+  currency_code       Currency              @default(USD)
+  create_at           DateTime              @default(now())
+  update_at           DateTime              @default(now()) @updatedAt
+  remove_at           DateTime?
+  order               order[]
+  order_group         order_group[]
+  order_group_payment order_group_payment[]
+  user                user?                 @relation(fields: [user_id], references: [id])
+  table               table?                @relation(fields: [table_id], references: [id])
+  market              market                @relation(fields: [market_id], references: [id])
+
+  @@index([guest_id, remove_at, type, status, order_num])
+}
+
+model order {
+  id            Int           @id @default(autoincrement())
+  main_order_id Int
+  order_num     String        @unique
+  total         Float
+  create_at     DateTime      @default(now())
+  update_at     DateTime      @default(now()) @updatedAt
+  remove_at     DateTime?
+  main_order    main_order    @relation(fields: [main_order_id], references: [id])
+  order_menu    order_menu[]
+  order_group   order_group[]
+
+  @@index([remove_at])
+}
+
+model order_menu {
+  id                  Int                 @id @default(autoincrement())
+  order_id            Int
+  menu_id             Int
+  order_group_id      Int
+  order_menu_stats_id Int?
+  status              OrderMenuStatus     @default(WAIT)
+  sum                 Float
+  original_amount     Float
+  quantity            Int?                @default(1)
+  create_at           DateTime            @default(now())
+  update_at           DateTime            @default(now()) @updatedAt
+  remove_at           DateTime?
+  menu                menu                @relation(fields: [menu_id], references: [id])
+  order               order               @relation(fields: [order_id], references: [id])
+  order_group         order_group         @relation(fields: [order_group_id], references: [id])
+  order_menu_stats    order_menu_stats?   @relation(fields: [order_menu_stats_id], references: [id])
+  order_menu_option   order_menu_option[]
+
+  @@index([remove_at, status, order_id, menu_id, order_group_id, order_menu_stats_id])
+}
+
+model order_menu_option {
+  id              Int         @id @default(autoincrement())
+  order_menu_id   Int
+  menu_option_id  Int
+  original_amount Float?
+  create_at       DateTime    @default(now())
+  update_at       DateTime    @default(now()) @updatedAt
+  remove_at       DateTime?
+  order_menu      order_menu  @relation(fields: [order_menu_id], references: [id])
+  menu_option     menu_option @relation(fields: [menu_option_id], references: [id])
+
+  @@index([remove_at, order_menu_id, menu_option_id])
+}
+
+model order_group {
+  id                     Int      @id @default(autoincrement())
+  group_id               Int
+  main_order_id          Int?
+  order_group_payment_id Int?
+  order_id               Int
+  request                String?
+  create_at              DateTime @default(now())
+  update_at              DateTime @default(now()) @updatedAt
+
+  group               group                @relation(fields: [group_id], references: [id])
+  order               order                @relation(fields: [order_id], references: [id])
+  main_order          main_order?          @relation(fields: [main_order_id], references: [id])
+  order_group_payment order_group_payment? @relation(fields: [order_group_payment_id], references: [id])
+  order_menu          order_menu[]
+
+  @@index([group_id, main_order_id, order_group_payment_id, order_id])
+}
+
+model language {
+  id                      Int                       @id @default(autoincrement())
+  name                    Country                   @default(USA)
+  code                    Language                  @default(en)
+  create_at               DateTime                  @default(now())
+  update_at               DateTime                  @default(now()) @updatedAt
+  remove_at               DateTime?
+  admin                   admin[]
+  menu_tl                 menu_tl[]
+  menu_option_tl          menu_option_tl[]
+  menu_option_category_tl menu_option_category_tl[]
+  menu_category_tl        menu_category_tl[]
+  group_tl                group_tl[]
+  market                  market[]
+
+  @@index([remove_at, code])
+}
+
+model menu_tl {
+  id          Int       @id @default(autoincrement())
+  menu_id     Int
+  language_id Int
+  name        String
+  content     String?
+  create_at   DateTime  @default(now())
+  update_at   DateTime  @default(now()) @updatedAt
+  remove_at   DateTime?
+  menu        menu?     @relation(fields: [menu_id], references: [id])
+  language    language? @relation(fields: [language_id], references: [id])
+
+  @@unique([menu_id, language_id])
+  @@index([remove_at])
+}
+
+model menu_option_category_tl {
+  id                      Int                   @id @default(autoincrement())
+  menu_option_category_id Int
+  language_id             Int
+  name                    String
+  create_at               DateTime              @default(now())
+  update_at               DateTime              @default(now()) @updatedAt
+  remove_at               DateTime?
+  menu_option_category    menu_option_category? @relation(fields: [menu_option_category_id], references: [id])
+  language                language?             @relation(fields: [language_id], references: [id])
+
+  @@unique([menu_option_category_id, language_id])
+  @@index([remove_at])
+}
+
+model menu_option_tl {
+  id             Int          @id @default(autoincrement())
+  menu_option_id Int
+  language_id    Int
+  name           String
+  create_at      DateTime     @default(now())
+  update_at      DateTime     @default(now()) @updatedAt
+  remove_at      DateTime?
+  menu_option    menu_option? @relation(fields: [menu_option_id], references: [id])
+  language       language?    @relation(fields: [language_id], references: [id])
+
+  @@unique([menu_option_id, language_id])
+  @@index([remove_at])
+}
+
+model group_tl {
+  id          Int       @id @default(autoincrement())
+  group_id    Int
+  language_id Int
+  name        String
+  create_at   DateTime  @default(now())
+  update_at   DateTime  @default(now()) @updatedAt
+  remove_at   DateTime?
+  group       group?    @relation(fields: [group_id], references: [id])
+  language    language? @relation(fields: [language_id], references: [id])
+
+  @@unique([group_id, language_id])
+  @@index([remove_at])
+}
+
+model menu_category_tl {
+  id               Int            @id @default(autoincrement())
+  menu_category_id Int
+  language_id      Int
+  name             String
+  create_at        DateTime       @default(now())
+  update_at        DateTime       @default(now()) @updatedAt
+  remove_at        DateTime?
+  menu_category    menu_category? @relation(fields: [menu_category_id], references: [id])
+  language         language?      @relation(fields: [language_id], references: [id])
+
+  @@unique([menu_category_id, language_id])
+  @@index([remove_at])
+}
+
+model order_group_payment {
+  id             Int                       @id @default(autoincrement())
+  main_order_id  Int
+  group_id       Int
+  credit_card_id Int?
+  total          Float
+  status         OrderGroupPaymentEnum     @default(NOT_PAID)
+  pay_type       OrderGroupPaymentTypeEnum @default(ON_SITE_PAYMENT)
+  create_at      DateTime                  @default(now())
+  update_at      DateTime                  @default(now()) @updatedAt
+  remove_at      DateTime?
+  group          group?                    @relation(fields: [group_id], references: [id])
+  main_order     main_order?               @relation(fields: [main_order_id], references: [id])
+  credit_card    credit_card?              @relation(fields: [credit_card_id], references: [id])
+  order_group    order_group[]
+
+  @@unique([group_id, main_order_id])
+  @@index([remove_at, status, main_order_id, group_id, pay_type])
+}
+
+model bank {
+  id          Int           @id @default(autoincrement())
+  code        String
+  name        String
+  create_at   DateTime      @default(now())
+  update_at   DateTime      @default(now()) @updatedAt
+  credit_card credit_card[]
+}
+
+model credit_card {
+  id                  Int                   @id @default(autoincrement())
+  bank_id             Int
+  card_number         String
+  holder_name         String
+  create_at           DateTime              @default(now())
+  update_at           DateTime              @default(now()) @updatedAt
+  bank                bank?                 @relation(fields: [bank_id], references: [id])
+  order_group_payment order_group_payment[]
+}
+
+model order_menu_stats {
+  id         Int          @id @default(autoincrement())
+  market_id  Int          @default(1)
+  group_id   Int?
+  quantity   Int          @default(0)
+  total      Float        @default(0)
+  date       DateTime?
+  create_at  DateTime     @default(now())
+  update_at  DateTime     @default(now()) @updatedAt
+  group      group?       @relation(fields: [group_id], references: [id])
+  market     market?      @relation(fields: [market_id], references: [id])
+  order_menu order_menu[]
+
+  @@index([group_id, date])
+}
+
+model currency {
+  id     Int      @id @default(autoincrement())
+  code   Currency @default(USD)
+  market market[]
+
+  @@index([code])
+}
+
+model logo {
+  id         Int      @id @default(autoincrement())
+  setting_id Int      @unique
+  hash       String
+  w120       String?
+  w360       String
+  create_at  DateTime @default(now())
+  update_at  DateTime @default(now()) @updatedAt
+  setting    setting? @relation(fields: [setting_id], references: [id])
+
+  @@index([hash])
+}
+
+model order_transaction {
+  id             Int                       @id @default(autoincrement())
+  main_order_num String?                   @unique
+  order_num      String                    @unique
+  data           Json
+  pay_type       OrderGroupPaymentTypeEnum @default(ON_SITE_PAYMENT)
+  status         Int                       @default(0)
+  create_at      DateTime                  @default(now())
+  update_at      DateTime                  @default(now()) @updatedAt
+
+  @@index([status, pay_type])
+}
+
+model notice {
+  id        Int       @id @default(autoincrement())
+  writer    Int
+  group_id  Int
+  index     Int       @default(0)
+  title     String
+  content   String    @db.Text
+  is_active Boolean   @default(false)
+  create_at DateTime  @default(now())
+  update_at DateTime  @default(now()) @updatedAt
+  remove_at DateTime?
+  group     group?    @relation(fields: [group_id], references: [id])
+
+  @@index([writer, group_id])
+}
+
+model comment {
+  id          Int       @id @default(autoincrement())
+  writer_id   Int?
+  writer_name String
+  parent_id   Int?
+  group_id    Int
+  content     String    @db.Text
+  password    String?
+  is_secret   Boolean   @default(false)
+  create_at   DateTime  @default(now())
+  update_at   DateTime  @default(now()) @updatedAt
+  remove_at   DateTime?
+  parent      comment?  @relation("comment", fields: [parent_id], references: [id])
+  child       comment[] @relation("comment")
+  group       group?    @relation(fields: [group_id], references: [id])
+
+  @@index([writer_id])
+}
+
+model custom_qr {
+  id        Int      @id @default(autoincrement())
+  market_id Int
+  phone     String?
+  name      String
+  address   String
+  map_url   String?
+  memo      String?
+  create_at DateTime @default(now())
+  update_at DateTime @default(now()) @updatedAt
+
+  market market? @relation(fields: [market_id], references: [id])
+
+  @@index([market_id])
+}
+
+model notice_image {
+  id        Int      @id @default(autoincrement())
+  hash      String   @unique
+  url       String
+  create_at DateTime @default(now())
+  update_at DateTime @default(now()) @updatedAt
+}
+
+model contact {
+  id             Int           @id @default(autoincrement())
+  name           String
+  company        String
+  phone          String
+  email          String
+  processor      Int?
+  status         ContactStatus @default(WAIT)
+  content        String        @db.Text
+  answer_content String?       @db.Text
+  answer_title   String?
+  create_at      DateTime      @default(now())
+  update_at      DateTime      @default(now()) @updatedAt
+  remove_at      DateTime?
+  admin          admin?        @relation(fields: [processor], references: [id])
+}

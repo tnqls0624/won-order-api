@@ -1,0 +1,22 @@
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - echo integration test
+      - echo Logging in to Amazon ECR...
+      - aws --version
+      - aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - docker build -t $PROJECT_NAME-$PROJECT_SUB_NAME/$ENV --build-arg ENV=dev .
+      - docker tag $PROJECT_NAME-$PROJECT_SUB_NAME/$ENV:latest $AWS_ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com/$PROJECT_NAME-$PROJECT_SUB_NAME/$ENV:latest
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker image...
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com/$PROJECT_NAME-$PROJECT_SUB_NAME/$ENV:latest
+      - printf '[{"name":'"\"${ECS_CONTAINER_NAME}\""',"imageUri":"%s"}]' $AWS_ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com/$PROJECT_NAME-$PROJECT_SUB_NAME/$ENV:latest > imagedefinitions.json
+artifacts:
+  files: imagedefinitions.json
