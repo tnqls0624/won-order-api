@@ -21,11 +21,6 @@ enum MenuOptionCategoryType {
   OPTION = 'OPTION'
 }
 
-type MenuOption = {
-  name: string;
-  amount: number;
-};
-
 type UpdateMenuOption = {
   name: string;
   amount: number;
@@ -37,14 +32,6 @@ type UpdateMenuOptionCategoryData = {
   name: string;
   max_select_count: number;
   menu_option: UpdateMenuOption[];
-};
-
-type MenuOptionCategoryData = {
-  index: number;
-  type: MenuOptionCategoryType;
-  name: string;
-  max_select_count: number;
-  menu_option: MenuOption[];
 };
 
 export class MenuRepositoryImplement implements MenuRepository {
@@ -64,20 +51,6 @@ export class MenuRepositoryImplement implements MenuRepository {
       const entity = this.modelToEntity(menu);
       await this.prisma.$transaction(
         async (tx: PrismaClient) => {
-          // const setting = await tx.setting.findFirst({
-          //   where: {
-          //     market_id
-          //   },
-          //   include: {
-          //     market: {
-          //       include: {
-          //         currency: true
-          //       }
-          //     }
-          //   }
-          // });
-          // const currency_entity = setting?.market?.currency;
-
           const menu_data = await tx.menu.create({
             data: {
               menu_category_id: entity.menu_category_id,
@@ -85,8 +58,28 @@ export class MenuRepositoryImplement implements MenuRepository {
               name: entity.name,
               content: entity.content,
               amount: entity.amount,
-              is_active: entity.is_active
-              // ...(currency_entity && { currency_id: currency_entity.id })
+              is_active: entity.is_active,
+              menu_on_image: {
+                create: entity?.image_ids?.map((v) => {
+                  return {
+                    image_id: v
+                  };
+                })
+              },
+              menu_option_category: {
+                create: entity.menu_option_category.map((moc) => {
+                  return {
+                    ...moc,
+                    menu_option: {
+                      create: moc.menu_option.map((mo) => {
+                        return {
+                          ...mo
+                        };
+                      })
+                    }
+                  };
+                })
+              }
             }
           });
 
@@ -130,27 +123,6 @@ export class MenuRepositoryImplement implements MenuRepository {
                 }
               });
             }
-          }
-
-          if (entity.image_ids.length) {
-            await Promise.all(
-              entity.image_ids.map(async (v) =>
-                tx.menu_on_image.create({
-                  data: {
-                    menu_id: menu_data.id,
-                    image_id: v
-                  }
-                })
-              )
-            );
-          }
-          if (entity.menu_option_category?.length) {
-            await this.createMenuOptionCategoriesAndOptions(
-              menu_data.id,
-              entity.menu_option_category,
-              market_id,
-              tx
-            );
           }
         },
         {
@@ -217,91 +189,6 @@ export class MenuRepositoryImplement implements MenuRepository {
       });
     }
     return true;
-  }
-  private async createMenuOptionCategoriesAndOptions(
-    menu_id: number,
-    menu_option_categories: MenuOptionCategoryData[],
-    market_id: number,
-    tx: PrismaClient
-  ): Promise<void> {
-    for (const category of menu_option_categories) {
-      const { menu_option: menu_options, ...menu_option_category } = category;
-      const menu_option_category_data = await tx.menu_option_category.create({
-        data: {
-          menu_id,
-          ...menu_option_category
-        }
-      });
-
-      const menu_option_category_name_tl =
-        await this.translateGenerator.gcpTranslate(
-          menu_option_category_data.name,
-          market_id
-        );
-
-      for (const obj of menu_option_category_name_tl) {
-        for (const [key, value] of Object.entries(obj)) {
-          let eng_value = '';
-          const is_eng = this.translateGenerator.isEnglishText(value);
-          if (is_eng) {
-            eng_value = this.translateGenerator.capitalizeFirstLetter(value);
-          }
-          await tx.menu_option_category_tl.create({
-            data: {
-              menu_option_category_id: menu_option_category_data.id,
-              language_id: Number(key),
-              name: is_eng ? eng_value : value
-            }
-          });
-        }
-      }
-
-      await this.createMenuOptions(
-        menu_options,
-        menu_option_category_data.id,
-        market_id,
-        tx
-      );
-    }
-  }
-
-  private async createMenuOptions(
-    menu_options: MenuOption[],
-    menu_option_category_id: number,
-    market_id: number,
-    tx: PrismaClient
-  ): Promise<void> {
-    await Promise.all(
-      menu_options.map(async (option) => {
-        const menu_option_data = await tx.menu_option.create({
-          data: {
-            menu_option_category_id,
-            ...option
-          }
-        });
-
-        const menu_option_name_tl = await this.translateGenerator.gcpTranslate(
-          option.name,
-          market_id
-        );
-        for (const obj of menu_option_name_tl) {
-          for (const [key, value] of Object.entries(obj)) {
-            let eng_value = '';
-            const is_eng = this.translateGenerator.isEnglishText(value);
-            if (is_eng) {
-              eng_value = this.translateGenerator.capitalizeFirstLetter(value);
-            }
-            await tx.menu_option_tl.create({
-              data: {
-                menu_option_id: menu_option_data.id,
-                language_id: Number(key),
-                name: is_eng ? eng_value : value
-              }
-            });
-          }
-        }
-      })
-    );
   }
 
   async delete(id: number): Promise<boolean> {
